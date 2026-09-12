@@ -81,6 +81,7 @@ class OverlayWindow(QWidget):
 
     config_changed = Signal(AppConfig)
     display_mode_changed = Signal(str)  # Signal to notify mode changes
+    quit_requested = Signal()  # Signal to request application quit
 
     def __init__(self, config: AppConfig):
         super().__init__()
@@ -428,4 +429,14 @@ class OverlayWindow(QWidget):
             self.app_config.save()
             event.accept()
         else:
+            event.ignore()
+
+    def closeEvent(self, event):
+        """Handle window close event."""
+        # In window mode, close event means quit the application
+        if self.ui_config.display_mode == "window":
+            self.quit_requested.emit()
+            event.accept()
+        else:
+            # In transparent mode, just ignore close events
             event.ignore()

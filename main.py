@@ -64,6 +64,7 @@ def main():
         pipeline.stop()
         app.quit()
 
+    overlay_window.quit_requested.connect(quit_application)
     tray_icon.quit_requested.connect(quit_application)
     app.aboutToQuit.connect(pipeline.stop)
 
