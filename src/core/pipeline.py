@@ -51,7 +51,9 @@ class TranscriptionPipeline(QThread):
             if ok:
                 print(f"[Pipeline] Ollama connected. Available models: {models}")
             else:
-                print("[Pipeline] Ollama not detected at start. Will retry when translating.")
+                print(
+                    "[Pipeline] Ollama not detected at start. Will retry when translating."
+                )
 
     def run(self):
         self.running = True
@@ -66,6 +68,7 @@ class TranscriptionPipeline(QThread):
         speech_chunks = []
         last_interim_time = 0.0
         interim_interval = 0.35  # seconds between real-time interim ASR updates
+        last_interim_text = ""  # Store last interim text to detect repetition
 
         while self.running:
             try:
@@ -76,7 +79,9 @@ class TranscriptionPipeline(QThread):
             if chunk is None or len(chunk) == 0:
                 continue
 
-            is_speaking, speech_started, speech_ended, full_utterance = self.vad_detector.process_chunk(chunk)
+            is_speaking, speech_started, speech_ended, full_utterance = (
+                self.vad_detector.process_chunk(chunk)
+            )
 
             if speech_started:
                 self.status_changed.emit("🎤 音声検出中...")
@@ -85,20 +90,51 @@ class TranscriptionPipeline(QThread):
                 speech_chunks.append(chunk)
                 now = time.time()
                 # Run interim ASR periodically if speaking
-                if now - last_interim_time >= interim_interval and len(speech_chunks) > 0:
+                if (
+                    now - last_interim_time >= interim_interval
+                    and len(speech_chunks) > 0
+                ):
                     last_interim_time = now
                     current_audio = np.concatenate(speech_chunks)
-                    if len(current_audio) >= 4800 and self.asr_engine and self.asr_engine.is_ready:  # At least 0.3s
-                        interim_text = self.asr_engine.transcribe(current_audio, beam_size=1)
+                    if (
+                        len(current_audio) >= 4800
+                        and self.asr_engine
+                        and self.asr_engine.is_ready
+                    ):  # At least 0.3s
+                        interim_text = self.asr_engine.transcribe(
+                            current_audio, beam_size=1
+                        )
                         if interim_text:
-                            self.asr_updated.emit(interim_text, False)
+                            # Remove repetition: if new text starts with last text, only show the new part
+                            if last_interim_text and interim_text.startswith(
+                                last_interim_text
+                            ):
+                                # New text contains all of last text, extract only the new portion
+                                new_portion = interim_text[
+                                    len(last_interim_text) :
+                                ].strip()
+                                if new_portion:
+                                    # Only show the accumulated text (don't add new portion separately)
+                                    display_text = interim_text
+                                else:
+                                    # No new content, use last interim text
+                                    display_text = last_interim_text
+                            else:
+                                # Text doesn't start with previous text, show as is
+                                display_text = interim_text
+
+                            last_interim_text = interim_text
+                            self.asr_updated.emit(display_text, False)
 
             if speech_ended and full_utterance is not None:
                 speech_chunks.clear()
+                last_interim_text = ""  # Reset interim text on speech end
                 self.status_changed.emit("⚡ 文字起こし処理中...")
                 if self.asr_engine:
                     if not self.asr_engine.is_ready:
-                        print("[Pipeline] ASR Engine loading in background, waiting for completion...")
+                        print(
+                            "[Pipeline] ASR Engine loading in background, waiting for completion..."
+                        )
                         # Wait up to 10 seconds for ASR model to finish loading if needed
                         for _ in range(100):
                             if self.asr_engine.is_ready or not self.running:
@@ -106,19 +142,24 @@ class TranscriptionPipeline(QThread):
                             time.sleep(0.1)
 
                     if self.asr_engine.is_ready:
-                        final_text = self.asr_engine.transcribe(full_utterance, beam_size=2)
+                        final_text = self.asr_engine.transcribe(
+                            full_utterance, beam_size=2
+                        )
                         if final_text:
                             print(f"[Pipeline] Confirmed ASR: {final_text}")
                             self.asr_updated.emit(final_text, True)
 
                             # Trigger translation if enabled
                             if self.config.translator.enabled and self.translator:
+
                                 def _on_translated(translation: str, success: bool):
                                     if success and translation:
                                         print(f"[Pipeline] Translation: {translation}")
                                         self.translation_updated.emit(translation)
 
-                                self.translator.translate_async(final_text, _on_translated)
+                                self.translator.translate_async(
+                                    final_text, _on_translated
+                                )
 
     def update_config(self, new_config: AppConfig):
         """Update runtime configuration."""
@@ -136,7 +177,10 @@ class TranscriptionPipeline(QThread):
         if self.translator:
             self.translator.config = new_config.translator
 
-        if self.asr_engine and self.asr_engine.config.model_size != new_config.asr.model_size:
+        if (
+            self.asr_engine
+            and self.asr_engine.config.model_size != new_config.asr.model_size
+        ):
             self.asr_engine.config = new_config.asr
             self.asr_engine.is_ready = False
             self.asr_engine.load_model_async()
