@@ -46,6 +46,7 @@ def main():
             def on_settings_saved(new_config: AppConfig):
                 overlay_window.app_config = new_config
                 overlay_window.ui_config = new_config.ui
+                overlay_window.set_display_mode(new_config.ui.display_mode)
                 overlay_window.apply_styles()
                 overlay_window.set_click_through(new_config.ui.click_through)
                 tray_icon.click_through_action.setChecked(new_config.ui.click_through)

@@ -60,6 +60,7 @@ class UIConfig:
     click_through: bool = True
     always_on_top: bool = True
     show_status: bool = True
+    display_mode: str = "transparent"  # "transparent" or "window"
 
 
 @dataclass

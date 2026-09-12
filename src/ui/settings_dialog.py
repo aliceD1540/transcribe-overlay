@@ -1,8 +1,21 @@
 from PySide6.QtCore import Signal, Slot, QTimer
 from PySide6.QtWidgets import (
-    QDialog, QTabWidget, QWidget, QVBoxLayout, QHBoxLayout,
-    QFormLayout, QComboBox, QSpinBox, QDoubleSpinBox, QCheckBox, QLineEdit,
-    QTextEdit, QPushButton, QMessageBox, QLabel, QProgressBar
+    QDialog,
+    QTabWidget,
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QFormLayout,
+    QComboBox,
+    QSpinBox,
+    QDoubleSpinBox,
+    QCheckBox,
+    QLineEdit,
+    QTextEdit,
+    QPushButton,
+    QMessageBox,
+    QLabel,
+    QProgressBar,
 )
 import sounddevice as sd
 import numpy as np
@@ -72,7 +85,9 @@ class SettingsDialog(QDialog):
         self.vad_threshold_spin.setRange(0.05, 0.95)
         self.vad_threshold_spin.setSingleStep(0.05)
         self.vad_threshold_spin.setDecimals(2)
-        self.vad_threshold_spin.setToolTip("音声検出感度（値が小さいほど感度が高くなります）")
+        self.vad_threshold_spin.setToolTip(
+            "音声検出感度（値が小さいほど感度が高くなります）"
+        )
 
         audio_layout.addRow("マイク入力デバイス:", dev_box)
         audio_layout.addRow("マイク入力レベル:", self.mic_meter)
@@ -84,7 +99,9 @@ class SettingsDialog(QDialog):
         asr_tab = QWidget()
         asr_layout = QFormLayout(asr_tab)
         self.asr_model_combo = QComboBox()
-        self.asr_model_combo.addItems(["tiny", "base", "small", "medium", "turbo", "large-v3-turbo"])
+        self.asr_model_combo.addItems(
+            ["tiny", "base", "small", "medium", "turbo", "large-v3-turbo"]
+        )
 
         self.asr_device_combo = QComboBox()
         self.asr_device_combo.addItems(["auto", "cpu", "cuda"])
@@ -124,6 +141,11 @@ class SettingsDialog(QDialog):
         ui_tab = QWidget()
         ui_layout = QFormLayout(ui_tab)
 
+        # Display Mode
+        self.display_mode_combo = QComboBox()
+        self.display_mode_combo.addItem("透過モード（オーバーレイ）", "transparent")
+        self.display_mode_combo.addItem("ウインドウモード", "window")
+
         self.show_status_cb = QCheckBox("ステータス表示枠を表示する")
 
         self.status_font_size_spin = QSpinBox()
@@ -142,6 +164,7 @@ class SettingsDialog(QDialog):
 
         self.click_through_cb = QCheckBox("位置固定（マウス透過モード）")
 
+        ui_layout.addRow("表示モード:", self.display_mode_combo)
         ui_layout.addRow(self.show_status_cb)
         ui_layout.addRow("ステータスフォントサイズ (px):", self.status_font_size_spin)
         ui_layout.addRow("文字起こしフォントサイズ (px):", self.asr_font_size_spin)
@@ -169,13 +192,15 @@ class SettingsDialog(QDialog):
 
     def _populate_audio_devices(self):
         self.device_combo.blockSignals(True)
-        current_data = self.device_combo.currentData() if self.device_combo.count() > 0 else None
+        current_data = (
+            self.device_combo.currentData() if self.device_combo.count() > 0 else None
+        )
         self.device_combo.clear()
         self.device_combo.addItem("システムデフォルト マイク", None)
         devices = AudioCapturer.get_input_devices()
         for dev in devices:
             self.device_combo.addItem(dev["name"], dev["index"])
-        
+
         idx = self.device_combo.findData(current_data)
         if idx >= 0:
             self.device_combo.setCurrentIndex(idx)
@@ -185,6 +210,7 @@ class SettingsDialog(QDialog):
         self._stop_mic_test()
         device_idx = self.device_combo.currentData()
         try:
+
             def audio_cb(indata, frames, time_info, status):
                 rms = np.sqrt(np.mean(indata[:, 0] ** 2))
                 level = min(100, int(rms * 1500))
@@ -256,11 +282,24 @@ class SettingsDialog(QDialog):
         self._populate_ollama_models(select_model=self.config.translator.model)
 
         # UI
+        # Display Mode
+        idx = self.display_mode_combo.findData(
+            getattr(self.config.ui, "display_mode", "transparent")
+        )
+        if idx >= 0:
+            self.display_mode_combo.setCurrentIndex(idx)
+        else:
+            self.display_mode_combo.setCurrentIndex(0)  # Default to transparent
+
         self.show_status_cb.setChecked(getattr(self.config.ui, "show_status", True))
-        self.status_font_size_spin.setValue(getattr(self.config.ui, "status_font_size", 14))
+        self.status_font_size_spin.setValue(
+            getattr(self.config.ui, "status_font_size", 14)
+        )
         self.asr_font_size_spin.setValue(self.config.ui.asr_font_size)
         self.trans_font_size_spin.setValue(self.config.ui.translation_font_size)
-        self.status_color_edit.setText(getattr(self.config.ui, "status_color", "#00E5FF"))
+        self.status_color_edit.setText(
+            getattr(self.config.ui, "status_color", "#00E5FF")
+        )
         self.asr_color_edit.setText(self.config.ui.asr_color)
         self.trans_color_edit.setText(self.config.ui.translation_color)
         self.bg_color_edit.setText(self.config.ui.bg_color)
@@ -284,21 +323,27 @@ class SettingsDialog(QDialog):
             else:
                 self.ollama_model_combo.setEditText(target)
         else:
-            self.ollama_model_combo.setEditText(select_model or self.config.translator.model)
+            self.ollama_model_combo.setEditText(
+                select_model or self.config.translator.model
+            )
 
     def _test_ollama_connection(self):
         url = self.ollama_url_edit.text().strip()
         temp_config = AppConfig()
         temp_config.translator.ollama_url = url
         translator = OllamaTranslator(temp_config.translator)
-        
+
         ok, models = translator.check_connection()
         if ok:
             self._populate_ollama_models()
             msg = f"Ollamaサーバーへの接続成功！\n検出されたモデル: {', '.join(models) if models else 'なし'}"
             QMessageBox.information(self, "接続成功", msg)
         else:
-            QMessageBox.warning(self, "接続失敗", f"URL {url} に接続できませんでした。\nOllamaが起動しているか確認してください。")
+            QMessageBox.warning(
+                self,
+                "接続失敗",
+                f"URL {url} に接続できませんでした。\nOllamaが起動しているか確認してください。",
+            )
 
     def _on_save(self):
         self._stop_mic_test()
@@ -314,8 +359,11 @@ class SettingsDialog(QDialog):
         self.config.translator.enabled = self.trans_enabled_cb.isChecked()
         self.config.translator.ollama_url = self.ollama_url_edit.text().strip()
         self.config.translator.model = self.ollama_model_combo.currentText().strip()
-        self.config.translator.system_prompt = self.system_prompt_edit.toPlainText().strip()
+        self.config.translator.system_prompt = (
+            self.system_prompt_edit.toPlainText().strip()
+        )
 
+        self.config.ui.display_mode = self.display_mode_combo.currentData()
         self.config.ui.show_status = self.show_status_cb.isChecked()
         self.config.ui.status_font_size = self.status_font_size_spin.value()
         self.config.ui.asr_font_size = self.asr_font_size_spin.value()
