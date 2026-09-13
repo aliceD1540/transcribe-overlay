@@ -1,6 +1,6 @@
 @echo off
-REM TranscribeOverlay - Windows実行スクリプト
-REM 仮想環境の作成、依存パッケージのインストール、アプリケーションの起動
+REM TranscribeOverlay - Windows launcher script
+REM Creates virtual environment, installs dependencies, and starts the application
 
 setlocal enabledelayedexpansion
 
@@ -10,11 +10,11 @@ echo TranscribeOverlay - Launcher
 echo ================================
 echo.
 
-REM Python が利用可能か確認
+REM Check if Python is available
 python --version >nul 2>&1
 if errorlevel 1 (
-    echo [ERROR] Python が見つかりません。
-    echo Python 3.8 以上をインストールしてください。
+    echo [ERROR] Python not found.
+    echo Please install Python 3.8 or later.
     echo https://www.python.org/
     pause
     exit /b 1
@@ -23,7 +23,7 @@ if errorlevel 1 (
 echo [OK] Python found
 python --version
 
-REM 仮想環境がなければ作成
+REM Create virtual environment if it doesn't exist
 if not exist "venv" (
     echo.
     echo [*] Creating virtual environment...
@@ -36,7 +36,7 @@ if not exist "venv" (
     echo [OK] Virtual environment created
 )
 
-REM 仮想環境を有効化
+REM Activate virtual environment
 echo.
 echo [*] Activating virtual environment...
 call venv\Scripts\activate.bat
@@ -47,7 +47,7 @@ if errorlevel 1 (
 )
 echo [OK] Virtual environment activated
 
-REM pip をアップグレード
+REM Upgrade pip
 echo.
 echo [*] Upgrading pip...
 python -m pip install --upgrade pip -q
@@ -55,7 +55,7 @@ if errorlevel 1 (
     echo [WARNING] pip upgrade failed, continuing anyway...
 )
 
-REM 依存パッケージをインストール
+REM Install dependencies
 echo.
 echo [*] Installing dependencies from requirements.txt...
 pip install -r requirements.txt
@@ -66,13 +66,13 @@ if errorlevel 1 (
 )
 echo [OK] Dependencies installed successfully
 
-REM アプリケーションを起動
+REM Start application
 echo.
 echo [*] Starting TranscribeOverlay...
 echo.
 python main.py
 
-REM エラー処理
+REM Error handling
 if errorlevel 1 (
     echo.
     echo [ERROR] Application exited with error code: !errorlevel!
