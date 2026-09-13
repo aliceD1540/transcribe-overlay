@@ -11,23 +11,31 @@ echo ================================
 echo.
 
 REM Check if Python is available
-python --version >nul 2>&1
+REM Try py.exe first (Windows Python Launcher)
+py -3 --version >nul 2>&1
 if errorlevel 1 (
-    echo [ERROR] Python not found.
-    echo Please install Python 3.8 or later.
-    echo https://www.python.org/
-    pause
-    exit /b 1
+    REM Fallback to python command
+    python --version >nul 2>&1
+    if errorlevel 1 (
+        echo [ERROR] Python not found.
+        echo Please install Python 3.8 or later.
+        echo https://www.python.org/
+        pause
+        exit /b 1
+    )
+    set PYTHON_CMD=python
+) else (
+    set PYTHON_CMD=py -3
 )
 
 echo [OK] Python found
-python --version
+%PYTHON_CMD% --version
 
 REM Create virtual environment if it doesn't exist
 if not exist "venv" (
     echo.
     echo [*] Creating virtual environment...
-    python -m venv venv
+    %PYTHON_CMD% -m venv venv
     if errorlevel 1 (
         echo [ERROR] Failed to create virtual environment
         pause
