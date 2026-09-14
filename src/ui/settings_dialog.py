@@ -36,7 +36,7 @@ class SettingsDialog(QDialog):
         super().__init__(parent)
         self.config = config
         self.setWindowTitle("リアルタイム文字起こし・翻訳 設定")
-        self.resize(580, 520)
+        self.resize(580, 580)
 
         self.test_stream: Optional[sd.InputStream] = None
         self.mic_level_signal.connect(self._update_mic_meter)
@@ -162,10 +162,22 @@ class SettingsDialog(QDialog):
         self.trans_color_edit = QLineEdit()
         self.bg_color_edit = QLineEdit()
 
+        self.window_width_spin = QSpinBox()
+        self.window_width_spin.setRange(300, 2000)
+        self.window_width_spin.setSingleStep(10)
+        self.window_width_spin.setToolTip("アプリケーションウインドウの横幅を設定します（透過/ウインドウモード共通）")
+
+        self.max_display_chars_spin = QSpinBox()
+        self.max_display_chars_spin.setRange(10, 1000)
+        self.max_display_chars_spin.setSingleStep(10)
+        self.max_display_chars_spin.setToolTip("一度に表示する最大文字数。超えた場合は末尾に「...」で省略します")
+
         self.click_through_cb = QCheckBox("位置固定（マウス透過モード）")
 
         ui_layout.addRow("表示モード:", self.display_mode_combo)
         ui_layout.addRow(self.show_status_cb)
+        ui_layout.addRow("ウインドウの横幅 (px):", self.window_width_spin)
+        ui_layout.addRow("最大表示文字数:", self.max_display_chars_spin)
         ui_layout.addRow("ステータスフォントサイズ (px):", self.status_font_size_spin)
         ui_layout.addRow("文字起こしフォントサイズ (px):", self.asr_font_size_spin)
         ui_layout.addRow("翻訳フォントサイズ (px):", self.trans_font_size_spin)
@@ -304,6 +316,10 @@ class SettingsDialog(QDialog):
         self.trans_color_edit.setText(self.config.ui.translation_color)
         self.bg_color_edit.setText(self.config.ui.bg_color)
         self.click_through_cb.setChecked(self.config.ui.click_through)
+        self.window_width_spin.setValue(getattr(self.config.ui, "window_width", 800))
+        self.max_display_chars_spin.setValue(
+            getattr(self.config.ui, "max_display_chars", 200)
+        )
 
     def _populate_ollama_models(self, select_model: str = ""):
         url = self.ollama_url_edit.text().strip()
@@ -373,6 +389,8 @@ class SettingsDialog(QDialog):
         self.config.ui.translation_color = self.trans_color_edit.text().strip()
         self.config.ui.bg_color = self.bg_color_edit.text().strip()
         self.config.ui.click_through = self.click_through_cb.isChecked()
+        self.config.ui.window_width = self.window_width_spin.value()
+        self.config.ui.max_display_chars = self.max_display_chars_spin.value()
 
         self.config.save()
         self.settings_saved.emit(self.config)

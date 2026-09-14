@@ -365,22 +365,34 @@ class OverlayWindow(QWidget):
         if self.title_bar_widget:
             self.title_bar_widget.setVisible(self.ui_config.display_mode == "window")
 
+    def _truncate_text(self, text: str, max_chars: int) -> str:
+        """Truncate text to max_chars with ellipsis if needed."""
+        if len(text) > max_chars:
+            return text[:max_chars] + "..."
+        return text
+
     @Slot(str, bool)
     def update_asr_text(self, text: str, is_final: bool):
         """Update ASR transcription text slot."""
         if not text:
             return
+        
+        max_chars = getattr(self.ui_config, "max_display_chars", 200)
+        truncated_text = self._truncate_text(text, max_chars)
+        
         if not is_final:
             # Interim (unconfirmed): translucent / italic representation
-            self.asr_label.setText(f"<i>... {text}</i>")
+            self.asr_label.setText(f"<i>... {truncated_text}</i>")
         else:
-            self.asr_label.setText(text)
+            self.asr_label.setText(truncated_text)
 
     @Slot(str)
     def update_translation_text(self, text: str):
         """Update translation text slot."""
         if text:
-            self.translation_label.setText(text)
+            max_chars = getattr(self.ui_config, "max_display_chars", 200)
+            truncated_text = self._truncate_text(text, max_chars)
+            self.translation_label.setText(truncated_text)
 
     @Slot(str)
     def update_status(self, status: str):

@@ -61,6 +61,7 @@ class UIConfig:
     always_on_top: bool = True
     show_status: bool = True
     display_mode: str = "transparent"  # "transparent" or "window"
+    max_display_chars: int = 200  # Maximum characters to display, truncate with "..." if exceeded
 
 
 @dataclass
