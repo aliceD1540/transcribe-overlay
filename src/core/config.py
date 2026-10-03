@@ -21,7 +21,8 @@ class VADConfig:
 
 @dataclass
 class ASRConfig:
-    model_size: str = "base"  # tiny, base, small, medium, turbo, large-v3-turbo
+    engine: str = "whisper"  # "whisper" or "moonshine"
+    model_size: str = "base"  # For Whisper: tiny, base, small, medium, turbo, large-v3-turbo
     device: str = "auto"  # auto, cpu, cuda
     compute_type: str = "default"  # default, float32, int8, float16
     language: str = "ja"
