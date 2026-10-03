@@ -227,9 +227,52 @@ class MoonshineASREngine:
             "お。",
             "い。",
             "う。",
+            "あっ。",    # Keyboard noise (key press sound)
+            "うん。",    # Keyboard noise variant
+            "あ",        # Single character without punctuation
+            "ん",        # Keyboard noise
+            "え",
+            "お",
+            "い",
+            "う",
         ]
         
         return text not in extreme_noise_patterns
+
+    def _is_likely_keyboard_noise(self, text: str, audio_length_ms: float) -> bool:
+        """
+        Detect keyboard noise based on characteristics.
+        Returns True if likely keyboard noise (should be rejected).
+        
+        Keyboard noise characteristics:
+        - Very short duration (typically < 300ms)
+        - Limited vocabulary (single sounds like 'ん', 'あ', etc.)
+        - Often followed by punctuation
+        """
+        text = text.strip()
+        if not text:
+            return False
+        
+        # Very short audio segments are likely keyboard noise
+        # Keyboard key press typically generates 50-200ms of sound
+        if audio_length_ms < 300:
+            # Check if text matches keyboard noise patterns
+            keyboard_patterns = [
+                # Single characters
+                "あ", "ん", "え", "お", "い", "う",
+                # Common keyboard noise patterns
+                "あっ", "うん", "えっ", 
+                # With punctuation
+                "あ。", "ん。", "え。", "お。", "い。", "う。",
+                "あっ。", "うん。", "えっ。",
+            ]
+            
+            if text in keyboard_patterns:
+                if self.debug_logging:
+                    print(f"[ASR:DEBUG] Likely keyboard noise detected: '{text}' (duration: {audio_length_ms:.0f}ms)")
+                return True
+        
+        return False
 
     def transcribe(self, audio: np.ndarray, beam_size: int = 1, vad_filter: bool = True) -> str:
         """Transcribe 1D float32 audio array (16kHz)."""
@@ -245,6 +288,9 @@ class MoonshineASREngine:
             return ""
 
         try:
+            # Calculate audio duration in milliseconds
+            audio_length_ms = (len(audio) / 16000.0) * 1000
+            
             # Create stream for offline recognition
             stream = self.recognizer.create_stream()
             
@@ -261,6 +307,10 @@ class MoonshineASREngine:
                 
                 # Apply confidence checks
                 if not self._is_confidence_high_enough(result):
+                    return ""
+                
+                # Detect keyboard noise based on duration and pattern
+                if self._is_likely_keyboard_noise(text, audio_length_ms):
                     return ""
                 
                 # Detect and filter repetition patterns
