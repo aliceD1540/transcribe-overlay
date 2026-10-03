@@ -36,6 +36,7 @@ class MoonshineASREngine:
         self.is_ready = False
         self._lock = threading.Lock()
         self.model_size = "tiny"  # Use smallest model by default for Japanese
+        self.debug_logging = True  # Enable detailed logging for debugging
 
     def load_model_async(self, on_loaded_callback: Optional[callable] = None):
         """Load model in background thread."""
@@ -152,10 +153,29 @@ class MoonshineASREngine:
         if hasattr(result, 'ys_log_probs') and len(result.ys_log_probs) > 0:
             # Average log probability - higher values = higher confidence
             avg_log_prob = sum(result.ys_log_probs) / len(result.ys_log_probs)
-            # Log probability threshold (empirically tuned for Moonshine)
-            # More negative values indicate lower confidence
-            # Very low scores like < -5.0 typically indicate noise/silence
-            if avg_log_prob < -3.5:
+            min_log_prob = min(result.ys_log_probs)
+            max_log_prob = max(result.ys_log_probs)
+            
+            text = result.text.strip()
+            text_length = len(text)
+            
+            # More strict threshold for very short results
+            if text_length <= 2:
+                # Extremely strict for single character
+                threshold = -4.5
+            elif text_length <= 4:
+                threshold = -4.0
+            else:
+                # Standard threshold for longer text
+                threshold = -3.5
+            
+            if self.debug_logging:
+                print(f"[ASR:DEBUG] Text: '{text}' | Len: {text_length} | "
+                      f"AvgLogProb: {avg_log_prob:.3f} | MinLogProb: {min_log_prob:.3f} | "
+                      f"MaxLogProb: {max_log_prob:.3f} | Threshold: {threshold:.3f} | "
+                      f"Pass: {avg_log_prob >= threshold}")
+            
+            if avg_log_prob < threshold:
                 return False
         else:
             # No log probs available - might indicate empty result
@@ -166,6 +186,35 @@ class MoonshineASREngine:
                 return False
         
         return True
+
+    def _detect_repetition_pattern(self, text: str) -> bool:
+        """
+        Detect repetitive patterns that indicate misrecognition.
+        Returns False if repetition detected (should be rejected).
+        """
+        text = text.strip()
+        if not text or len(text) < 4:
+            return True  # Not enough text to be repetitive
+        
+        # Split by common delimiters and check for repetition
+        import re
+        # Split by punctuation and common connectors
+        # Note: exclude 'の' from delimiters as it's part of many words
+        parts = re.split(r'[、。，，をで]', text)
+        parts = [p.strip() for p in parts if p.strip()]
+        
+        if len(parts) < 3:
+            return True  # Not enough parts to be repetitive
+        
+        # Check if first few parts are identical or very similar
+        # This catches "この私を、この私を、この私を..."
+        if len(parts) >= 3:
+            if parts[0] == parts[1] == parts[2]:
+                if self.debug_logging:
+                    print(f"[ASR:DEBUG] Repetition detected: '{text}'")
+                return False  # Reject
+        
+        return True  # No repetition detected, accept
 
     def _filter_extreme_noise_patterns(self, text: str) -> bool:
         """Filter only extreme noise patterns (single character with punctuation)."""
@@ -212,6 +261,10 @@ class MoonshineASREngine:
                 
                 # Apply confidence checks
                 if not self._is_confidence_high_enough(result):
+                    return ""
+                
+                # Detect and filter repetition patterns
+                if not self._detect_repetition_pattern(text):
                     return ""
                 
                 # Filter extreme noise patterns
