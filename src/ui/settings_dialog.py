@@ -93,31 +93,79 @@ class SettingsDialog(QDialog):
         audio_layout.addRow("マイク入力レベル:", self.mic_meter)
         audio_layout.addRow("VAD音声検出閾値:", self.vad_threshold_spin)
 
+        # VAD詳細設定
+        self.min_silence_duration_spin = QSpinBox()
+        self.min_silence_duration_spin.setRange(100, 2000)
+        self.min_silence_duration_spin.setSingleStep(100)
+        self.min_silence_duration_spin.setValue(500)
+        self.min_silence_duration_spin.setToolTip(
+            "無音と判定する最小時間 (ミリ秒)。キーボード音を減らしたい場合は大きめに設定してください"
+        )
+
+        self.speech_pad_spin = QSpinBox()
+        self.speech_pad_spin.setRange(0, 500)
+        self.speech_pad_spin.setSingleStep(50)
+        self.speech_pad_spin.setValue(200)
+        self.speech_pad_spin.setToolTip(
+            "音声の前後に付与する余白 (ミリ秒)。安全マージンで若干大きめがお勧めです"
+        )
+
+        audio_layout.addRow("無音判定時間 (ms):", self.min_silence_duration_spin)
+        audio_layout.addRow("音声パッド (ms):", self.speech_pad_spin)
+
         self.tab_widget.addTab(audio_tab, "音声入力")
 
-        # Tab 2: ASR (Whisper)
+        # Tab 2: ASR (Whisper / Moonshine)
         asr_tab = QWidget()
         asr_layout = QFormLayout(asr_tab)
+
+        # ASRエンジン選択
+        self.asr_engine_combo = QComboBox()
+        self.asr_engine_combo.addItem("Whisper (高精度, 時間かかる)", "whisper")
+        self.asr_engine_combo.addItem("Moonshine-v2 日本語 (高速, 軽量)", "moonshine")
+        self.asr_engine_combo.currentIndexChanged.connect(self._on_asr_engine_changed)
+
+        asr_layout.addRow("文字起こしエンジン:", self.asr_engine_combo)
+
+        # ASRモデルサイズ（エンジン依存）
         self.asr_model_combo = QComboBox()
-        self.asr_model_combo.addItems([
+        self.asr_model_label = QLabel("モデルサイズ:")
+
+        # Whisperモデルリスト
+        self.whisper_models = [
             "tiny (39M)",
             "small (74M)",
             "base (140M)",
             "medium (769M)",
             "turbo (809M)",
             "large-v3-turbo (809M)"
-        ])
+        ]
+        # Moonshineモデルリスト
+        self.moonshine_models = [
+            "tiny-ja (69M, 最速)",
+            "base-ja (135M, 高精度)"
+        ]
+
+        asr_layout.addRow(self.asr_model_label, self.asr_model_combo)
 
         self.asr_device_combo = QComboBox()
         self.asr_device_combo.addItems(["auto", "cpu", "cuda"])
+        self.asr_device_label = QLabel("推論デバイス:")
 
         self.asr_compute_combo = QComboBox()
         self.asr_compute_combo.addItems(["default", "int8", "float32", "float16"])
+        self.asr_compute_label = QLabel("演算精度:")
 
-        asr_layout.addRow("Whisperモデルサイズ:", self.asr_model_combo)
-        asr_layout.addRow("推論デバイス:", self.asr_device_combo)
-        asr_layout.addRow("演算精度 (Compute Type):", self.asr_compute_combo)
-        self.tab_widget.addTab(asr_tab, "文字起こし (Whisper)")
+        asr_layout.addRow(self.asr_device_label, self.asr_device_combo)
+        asr_layout.addRow(self.asr_compute_label, self.asr_compute_combo)
+
+        # 情報ラベル
+        self.asr_info_label = QLabel()
+        self.asr_info_label.setWordWrap(True)
+        self.asr_info_label.setStyleSheet("color: #888; font-size: 11px;")
+        asr_layout.addRow(self.asr_info_label)
+
+        self.tab_widget.addTab(asr_tab, "文字起こし (ASR)")
 
         # Tab 3: Translation (Ollama)
         trans_tab = QWidget()
@@ -257,6 +305,64 @@ class SettingsDialog(QDialog):
     def _on_device_changed(self):
         self._start_mic_test()
 
+    def _on_asr_engine_changed(self):
+        """Update model list and UI when ASR engine is changed."""
+        self._update_asr_models()
+
+    def _update_asr_models(self):
+        """Update ASR model list based on selected engine."""
+        engine = self.asr_engine_combo.currentData()
+        self.asr_model_combo.blockSignals(True)
+        self.asr_model_combo.clear()
+
+        if engine == "moonshine":
+            # Moonshine モデル
+            self.asr_model_combo.addItems(self.moonshine_models)
+            self.asr_model_label.setText("モデルサイズ (日本語):")
+            
+            # Moonshineではcompute_typeは不要
+            self.asr_compute_label.setVisible(False)
+            self.asr_compute_combo.setVisible(False)
+            
+            # 情報表示
+            info_text = "✓ 日本語特化モデル\n✓ 軽量・高速\n✓ キーボード音フィルタリング機能付き"
+            
+            # モデル選択
+            current_model = getattr(self.config.asr, "model_size", "tiny-ja")
+            if current_model.startswith("tiny"):
+                self.asr_model_combo.setCurrentIndex(0)
+            elif current_model.startswith("base"):
+                self.asr_model_combo.setCurrentIndex(1)
+        else:
+            # Whisper モデル
+            self.asr_model_combo.addItems(self.whisper_models)
+            self.asr_model_label.setText("モデルサイズ:")
+            
+            # Whisperではcompute_typeが必要
+            self.asr_compute_label.setVisible(True)
+            self.asr_compute_combo.setVisible(True)
+            
+            # 情報表示
+            info_text = "✓ 多言語対応\n✓ 高精度だが処理時間がかかる\n✓ モデルによってメモリ負荷が変わる"
+            
+            # モデル選択
+            model_display_map = {
+                "tiny": "tiny (39M)",
+                "small": "small (74M)",
+                "base": "base (140M)",
+                "medium": "medium (769M)",
+                "turbo": "turbo (809M)",
+                "large-v3-turbo": "large-v3-turbo (809M)"
+            }
+            current_model = getattr(self.config.asr, "model_size", "base")
+            display_text = model_display_map.get(current_model, current_model)
+            idx = self.asr_model_combo.findText(display_text)
+            if idx >= 0:
+                self.asr_model_combo.setCurrentIndex(idx)
+
+        self.asr_info_label.setText(info_text)
+        self.asr_model_combo.blockSignals(False)
+
     @Slot(int)
     def _update_mic_meter(self, level: int):
         self.mic_meter.setValue(level)
@@ -278,20 +384,19 @@ class SettingsDialog(QDialog):
             self.device_combo.setCurrentIndex(0)
 
         self.vad_threshold_spin.setValue(self.config.vad.threshold)
+        self.min_silence_duration_spin.setValue(self.config.vad.min_silence_duration_ms)
+        self.speech_pad_spin.setValue(self.config.vad.speech_pad_ms)
 
-        # ASR - モデル名を表示用に変換
-        model_display_map = {
-            "tiny": "tiny (39M)",
-            "small": "small (74M)",
-            "base": "base (140M)",
-            "medium": "medium (769M)",
-            "turbo": "turbo (809M)",
-            "large-v3-turbo": "large-v3-turbo (809M)"
-        }
-        display_text = model_display_map.get(self.config.asr.model_size, self.config.asr.model_size)
-        idx = self.asr_model_combo.findText(display_text)
+        # ASR - エンジン選択
+        engine = getattr(self.config.asr, "engine", "whisper")
+        idx = self.asr_engine_combo.findData(engine)
         if idx >= 0:
-            self.asr_model_combo.setCurrentIndex(idx)
+            self.asr_engine_combo.setCurrentIndex(idx)
+        else:
+            self.asr_engine_combo.setCurrentIndex(0)  # Default to Whisper
+
+        # エンジンに応じてモデルを設定
+        self._update_asr_models()
 
         idx = self.asr_device_combo.findText(self.config.asr.device)
         if idx >= 0:
@@ -381,11 +486,17 @@ class SettingsDialog(QDialog):
         # Update config object
         self.config.audio.device_index = self.device_combo.currentData()
         self.config.vad.threshold = self.vad_threshold_spin.value()
+        self.config.vad.min_silence_duration_ms = self.min_silence_duration_spin.value()
+        self.config.vad.speech_pad_ms = self.speech_pad_spin.value()
 
-        # ASR - モデル名から「(XXM)」部分を削除して保存
+        # ASR - エンジンとモデルを保存
+        self.config.asr.engine = self.asr_engine_combo.currentData()
+        
+        # モデル名から「(XXM)」や「(高速)」部分を削除して保存
         model_text = self.asr_model_combo.currentText()
         model_name = model_text.split(" (")[0]  # "small (74M)" → "small"
         self.config.asr.model_size = model_name
+        
         self.config.asr.device = self.asr_device_combo.currentText()
         self.config.asr.compute_type = self.asr_compute_combo.currentText()
 
