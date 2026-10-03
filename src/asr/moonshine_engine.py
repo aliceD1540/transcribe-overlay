@@ -146,6 +146,42 @@ class MoonshineASREngine:
                 if on_loaded_callback:
                     on_loaded_callback(False, str(e))
 
+    def _is_confidence_high_enough(self, result) -> bool:
+        """Check if recognition confidence is high enough to be trusted."""
+        # Check log probabilities - main confidence indicator
+        if hasattr(result, 'ys_log_probs') and len(result.ys_log_probs) > 0:
+            # Average log probability - higher values = higher confidence
+            avg_log_prob = sum(result.ys_log_probs) / len(result.ys_log_probs)
+            # Log probability threshold (empirically tuned for Moonshine)
+            # More negative values indicate lower confidence
+            # Very low scores like < -5.0 typically indicate noise/silence
+            if avg_log_prob < -3.5:
+                return False
+        else:
+            # No log probs available - might indicate empty result
+            # But also happens with valid short results
+            # Only reject if text is extremely short AND no log probs
+            text = result.text.strip()
+            if len(text) <= 1 and not result.ys_log_probs:
+                return False
+        
+        return True
+
+    def _filter_extreme_noise_patterns(self, text: str) -> bool:
+        """Filter only extreme noise patterns (single character with punctuation)."""
+        # Only filter the most obvious noise: single character + punctuation
+        # This is very conservative to avoid filtering actual speech
+        extreme_noise_patterns = [
+            "あ。",      # Single syllable
+            "ん。",      # Single character
+            "え。",
+            "お。",
+            "い。",
+            "う。",
+        ]
+        
+        return text not in extreme_noise_patterns
+
     def transcribe(self, audio: np.ndarray, beam_size: int = 1, vad_filter: bool = True) -> str:
         """Transcribe 1D float32 audio array (16kHz)."""
         if not self.is_ready or self.recognizer is None:
@@ -172,7 +208,17 @@ class MoonshineASREngine:
             # Get result
             result = stream.result
             if result.text:
-                return result.text.strip()
+                text = result.text.strip()
+                
+                # Apply confidence checks
+                if not self._is_confidence_high_enough(result):
+                    return ""
+                
+                # Filter extreme noise patterns
+                if not self._filter_extreme_noise_patterns(text):
+                    return ""
+                
+                return text
             return ""
 
         except Exception as e:
