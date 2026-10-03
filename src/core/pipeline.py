@@ -177,13 +177,19 @@ class TranscriptionPipeline(QThread):
         if self.translator:
             self.translator.config = new_config.translator
 
-        if (
-            self.asr_engine
-            and self.asr_engine.config.model_size != new_config.asr.model_size
-        ):
+        if self.asr_engine:
+            # Check if any ASR-critical settings have changed
+            needs_reload = (
+                self.asr_engine.config.model_size != new_config.asr.model_size
+                or self.asr_engine.config.device != new_config.asr.device
+                or self.asr_engine.config.compute_type != new_config.asr.compute_type
+            )
             self.asr_engine.config = new_config.asr
-            self.asr_engine.is_ready = False
-            self.asr_engine.load_model_async()
+            if needs_reload:
+                self.asr_engine.is_ready = False
+                self.asr_engine.model = None
+                self.asr_engine.is_loading = False
+                self.asr_engine.load_model_async()
 
     def stop(self):
         self.running = False

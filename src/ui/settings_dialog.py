@@ -99,9 +99,14 @@ class SettingsDialog(QDialog):
         asr_tab = QWidget()
         asr_layout = QFormLayout(asr_tab)
         self.asr_model_combo = QComboBox()
-        self.asr_model_combo.addItems(
-            ["tiny", "base", "small", "medium", "turbo", "large-v3-turbo"]
-        )
+        self.asr_model_combo.addItems([
+            "tiny (39M)",
+            "small (74M)",
+            "base (140M)",
+            "medium (769M)",
+            "turbo (809M)",
+            "large-v3-turbo (809M)"
+        ])
 
         self.asr_device_combo = QComboBox()
         self.asr_device_combo.addItems(["auto", "cpu", "cuda"])
@@ -274,8 +279,17 @@ class SettingsDialog(QDialog):
 
         self.vad_threshold_spin.setValue(self.config.vad.threshold)
 
-        # ASR
-        idx = self.asr_model_combo.findText(self.config.asr.model_size)
+        # ASR - モデル名を表示用に変換
+        model_display_map = {
+            "tiny": "tiny (39M)",
+            "small": "small (74M)",
+            "base": "base (140M)",
+            "medium": "medium (769M)",
+            "turbo": "turbo (809M)",
+            "large-v3-turbo": "large-v3-turbo (809M)"
+        }
+        display_text = model_display_map.get(self.config.asr.model_size, self.config.asr.model_size)
+        idx = self.asr_model_combo.findText(display_text)
         if idx >= 0:
             self.asr_model_combo.setCurrentIndex(idx)
 
@@ -368,7 +382,10 @@ class SettingsDialog(QDialog):
         self.config.audio.device_index = self.device_combo.currentData()
         self.config.vad.threshold = self.vad_threshold_spin.value()
 
-        self.config.asr.model_size = self.asr_model_combo.currentText()
+        # ASR - モデル名から「(XXM)」部分を削除して保存
+        model_text = self.asr_model_combo.currentText()
+        model_name = model_text.split(" (")[0]  # "small (74M)" → "small"
+        self.config.asr.model_size = model_name
         self.config.asr.device = self.asr_device_combo.currentText()
         self.config.asr.compute_type = self.asr_compute_combo.currentText()
 
