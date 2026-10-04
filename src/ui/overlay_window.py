@@ -93,6 +93,8 @@ class OverlayWindow(QWidget):
 
         self._init_ui()
         self._init_window_flags()
+        # Re-apply geometry after setWindowFlags() which may reset the window size
+        self._restore_geometry()
         self.apply_styles()
 
     def _init_window_flags(self):
@@ -100,6 +102,20 @@ class OverlayWindow(QWidget):
         self._apply_display_mode_flags()
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.set_click_through(self.ui_config.click_through)
+
+    def _restore_geometry(self):
+        """Restore window geometry after setWindowFlags() which may have reset it."""
+        window_height = self.ui_config.window_height
+        if self.ui_config.display_mode == "window":
+            # Window mode needs more space for titlebar and content
+            window_height = max(400, window_height)
+
+        self.setGeometry(
+            self.ui_config.window_x,
+            self.ui_config.window_y,
+            self.ui_config.window_width,
+            window_height,
+        )
 
     def _apply_display_mode_flags(self):
         """Apply window flags based on current display mode."""
