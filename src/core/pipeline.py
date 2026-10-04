@@ -1,6 +1,6 @@
 import queue
 import time
-from typing import Optional
+from typing import Optional, Union
 import numpy as np
 from PySide6.QtCore import QThread, Signal
 
@@ -8,6 +8,7 @@ from src.core.config import AppConfig
 from src.audio.capture import AudioCapturer
 from src.audio.vad import SileroVADDetector
 from src.asr.whisper_engine import WhisperASREngine
+from src.asr.moonshine_engine import MoonshineASREngine
 from src.translator.ollama_client import OllamaTranslator
 
 
@@ -25,7 +26,7 @@ class TranscriptionPipeline(QThread):
 
         self.audio_capturer: Optional[AudioCapturer] = None
         self.vad_detector: Optional[SileroVADDetector] = None
-        self.asr_engine: Optional[WhisperASREngine] = None
+        self.asr_engine: Optional[Union[WhisperASREngine, MoonshineASREngine]] = None
         self.translator: Optional[OllamaTranslator] = None
 
     def initialize_components(self):
@@ -33,7 +34,15 @@ class TranscriptionPipeline(QThread):
         self.status_changed.emit("設定を読み込み中...")
         self.audio_capturer = AudioCapturer(self.config.audio)
         self.vad_detector = SileroVADDetector(self.config.vad)
-        self.asr_engine = WhisperASREngine(self.config.asr)
+        
+        # Select ASR engine based on config
+        if self.config.asr.engine == "moonshine":
+            print("[Pipeline] Initializing Moonshine ASR engine via Sherpa-ONNX...")
+            self.asr_engine = MoonshineASREngine(self.config.asr)
+        else:
+            print("[Pipeline] Initializing Whisper ASR engine...")
+            self.asr_engine = WhisperASREngine(self.config.asr)
+        
         self.translator = OllamaTranslator(self.config.translator)
 
         # Load ASR model asynchronously
