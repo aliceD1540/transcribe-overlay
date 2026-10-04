@@ -241,6 +241,16 @@ class SettingsDialog(QDialog):
         ui_layout.addRow(self.click_through_cb)
         self.tab_widget.addTab(ui_tab, "画面表示・オーバーレイ")
 
+        # Tab 5: Debug
+        debug_tab = QWidget()
+        debug_layout = QFormLayout(debug_tab)
+        self.debug_logging_cb = QCheckBox("デバッグログを出力する")
+        self.debug_logging_cb.setToolTip(
+            "有効にするとコンソールに詳細なデバッグ情報（信頼度、フィルター判定など）が表示されます"
+        )
+        debug_layout.addRow(self.debug_logging_cb)
+        self.tab_widget.addTab(debug_tab, "その他設定")
+
         main_layout.addWidget(self.tab_widget)
 
         # Buttons
@@ -440,6 +450,11 @@ class SettingsDialog(QDialog):
             getattr(self.config.ui, "max_display_chars", 200)
         )
 
+        # Debug
+        self.debug_logging_cb.setChecked(
+            getattr(self.config.debug, "debug_logging", False)
+        )
+
     def _populate_ollama_models(self, select_model: str = ""):
         url = self.ollama_url_edit.text().strip()
         temp_config = AppConfig()
@@ -519,6 +534,9 @@ class SettingsDialog(QDialog):
         self.config.ui.click_through = self.click_through_cb.isChecked()
         self.config.ui.window_width = self.window_width_spin.value()
         self.config.ui.max_display_chars = self.max_display_chars_spin.value()
+
+        # Debug
+        self.config.debug.debug_logging = self.debug_logging_cb.isChecked()
 
         self.config.save()
         self.settings_saved.emit(self.config)

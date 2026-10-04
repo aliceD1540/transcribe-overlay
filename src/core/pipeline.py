@@ -43,6 +43,10 @@ class TranscriptionPipeline(QThread):
             print("[Pipeline] Initializing Whisper ASR engine...")
             self.asr_engine = WhisperASREngine(self.config.asr)
         
+        # Apply debug logging setting to ASR engine
+        if hasattr(self.asr_engine, 'debug_logging'):
+            self.asr_engine.debug_logging = self.config.debug.debug_logging
+        
         self.translator = OllamaTranslator(self.config.translator)
 
         # Load ASR model asynchronously
@@ -194,6 +198,9 @@ class TranscriptionPipeline(QThread):
                 or self.asr_engine.config.compute_type != new_config.asr.compute_type
             )
             self.asr_engine.config = new_config.asr
+            # Update debug logging setting
+            if hasattr(self.asr_engine, 'debug_logging'):
+                self.asr_engine.debug_logging = new_config.debug.debug_logging
             if needs_reload:
                 self.asr_engine.is_ready = False
                 self.asr_engine.model = None

@@ -66,12 +66,19 @@ class UIConfig:
 
 
 @dataclass
+class DebugConfig:
+    """Debug and logging settings."""
+    debug_logging: bool = False  # Enable detailed debug logging output
+
+
+@dataclass
 class AppConfig:
     audio: AudioConfig = field(default_factory=AudioConfig)
     vad: VADConfig = field(default_factory=VADConfig)
     asr: ASRConfig = field(default_factory=ASRConfig)
     translator: TranslatorConfig = field(default_factory=TranslatorConfig)
     ui: UIConfig = field(default_factory=UIConfig)
+    debug: DebugConfig = field(default_factory=DebugConfig)
 
     @classmethod
     def load(cls, file_path: str = "config.json") -> "AppConfig":
@@ -89,6 +96,7 @@ class AppConfig:
                 asr=ASRConfig(**data.get("asr", {})),
                 translator=TranslatorConfig(**data.get("translator", {})),
                 ui=UIConfig(**data.get("ui", {})),
+                debug=DebugConfig(**data.get("debug", {})),
             )
         except Exception as e:
             print(f"[Config] Error loading {file_path}, using defaults: {e}")
