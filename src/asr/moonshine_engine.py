@@ -149,6 +149,17 @@ class MoonshineASREngine:
 
     def _is_confidence_high_enough(self, result) -> bool:
         """Check if recognition confidence is high enough to be trusted."""
+        text = result.text.strip()
+        text_length = len(text)
+        
+        # Reject empty text or only punctuation
+        if not text or text.isspace():
+            return False
+        
+        # Reject text that is only punctuation/brackets
+        if all(c in '。？！、，，""""【】《》「」『』<<>>~・' for c in text):
+            return False
+        
         # Check log probabilities - main confidence indicator
         if hasattr(result, 'ys_log_probs') and len(result.ys_log_probs) > 0:
             # Average log probability - higher values = higher confidence
@@ -156,12 +167,12 @@ class MoonshineASREngine:
             min_log_prob = min(result.ys_log_probs)
             max_log_prob = max(result.ys_log_probs)
             
-            text = result.text.strip()
-            text_length = len(text)
-            
-            # More strict threshold for very short results
-            if text_length <= 2:
-                # Extremely strict for single character
+            # Much stricter threshold for very short results
+            if text_length == 1:
+                # Single character: extremely strict
+                threshold = -5.0
+            elif text_length <= 2:
+                # 2 characters: very strict
                 threshold = -4.5
             elif text_length <= 4:
                 threshold = -4.0
@@ -181,8 +192,7 @@ class MoonshineASREngine:
             # No log probs available - might indicate empty result
             # But also happens with valid short results
             # Only reject if text is extremely short AND no log probs
-            text = result.text.strip()
-            if len(text) <= 1 and not result.ys_log_probs:
+            if text_length <= 1 and not result.ys_log_probs:
                 return False
         
         return True
@@ -217,24 +227,35 @@ class MoonshineASREngine:
         return True  # No repetition detected, accept
 
     def _filter_extreme_noise_patterns(self, text: str) -> bool:
-        """Filter only extreme noise patterns (single character with punctuation)."""
-        # Only filter the most obvious noise: single character + punctuation
-        # This is very conservative to avoid filtering actual speech
+        """Filter extreme noise patterns including empty brackets and keyboard noise."""
+        # Patterns that are clearly not speech but keyboard/noise artifacts
         extreme_noise_patterns = [
-            "あ。",      # Single syllable
-            "ん。",      # Single character
-            "え。",
-            "お。",
-            "い。",
-            "う。",
-            "あっ。",    # Keyboard noise (key press sound)
-            "うん。",    # Keyboard noise variant
-            "あ",        # Single character without punctuation
-            "ん",        # Keyboard noise
-            "え",
-            "お",
-            "い",
-            "う",
+            # Empty/minimal brackets
+            "「」", "『』", "【】", "《》", "<<>>",
+            "。", "？", "！", "、", "，",  # Standalone punctuation
+            ".", "?", "!", ",",  # Latin punctuation
+            
+            # Single character variations (無音-keyboard click noise)
+            "あ", "い", "う", "え", "お", "ん",
+            "あ。", "い。", "う。", "え。", "お。", "ん。",
+            "あ？", "い？", "う？", "え？", "お？", "ん？",
+            "あ！", "い！", "う！", "え！", "お！", "ん！",
+            "あ、", "い、", "う、", "え、", "お、", "ん、",
+            
+            # Double character keyboard noise patterns
+            "あっ", "えっ", "おっ", "うっ", "いっ",
+            "あっ。", "えっ。", "おっ。", "うっ。", "いっ。",
+            "あっ？", "えっ？", "おっ？", "うっ？", "いっ？",
+            "あっ！", "えっ！", "おっ！", "うっ！", "いっ！",
+            "あっ、", "えっ、", "おっ、", "うっ、", "いっ、",
+            
+            # Common filler/interjection noise (from mechanical vibration)
+            "うん", "うん。", "うん？", "うん！", "うん、",
+            "えっと",  # Often follows keyboard click
+            
+            # Doubled sounds (keyboard glitch)
+            "ああ", "いい", "うう", "ええ", "おお", "んん",
+            "ああ。", "いい。", "うう。", "ええ。", "おお。", "んん。",
         ]
         
         return text not in extreme_noise_patterns
@@ -245,31 +266,54 @@ class MoonshineASREngine:
         Returns True if likely keyboard noise (should be rejected).
         
         Keyboard noise characteristics:
-        - Very short duration (typically < 300ms)
-        - Limited vocabulary (single sounds like 'ん', 'あ', etc.)
+        - Very short duration (typically < 300ms for single key press, < 600ms for double click)
+        - Limited vocabulary (single sounds like 'ん', 'あ', etc., or mechanical tones)
         - Often followed by punctuation
+        - Very low confidence from ASR model
         """
         text = text.strip()
         if not text:
             return False
         
-        # Very short audio segments are likely keyboard noise
-        # Keyboard key press typically generates 50-200ms of sound
+        # Pattern-based detection for very short audio (mechanical noise)
         if audio_length_ms < 300:
-            # Check if text matches keyboard noise patterns
             keyboard_patterns = [
-                # Single characters
-                "あ", "ん", "え", "お", "い", "う",
-                # Common keyboard noise patterns
-                "あっ", "うん", "えっ", 
-                # With punctuation
-                "あ。", "ん。", "え。", "お。", "い。", "う。",
-                "あっ。", "うん。", "えっ。",
+                # Single vowel characters
+                "あ", "い", "う", "え", "お", "ん",
+                # Doubled vowels (mechanical resonance)
+                "ああ", "いい", "うう", "ええ", "おお",
+                # With punctuation (all combinations)
+                "あ。", "い。", "う。", "え。", "お。", "ん。",
+                "あ？", "い？", "う？", "え？", "お？", "ん？",
+                "あ！", "い！", "う！", "え！", "お！", "ん！",
+                "あ、", "い、", "う、", "え、", "お、", "ん、",
+                "あ.", "い.", "う.", "え.", "お.", "ん.",
             ]
             
             if text in keyboard_patterns:
                 if self.debug_logging:
-                    print(f"[ASR:DEBUG] Likely keyboard noise detected: '{text}' (duration: {audio_length_ms:.0f}ms)")
+                    print(f"[ASR:DEBUG] Keyboard noise (single key): '{text}' (duration: {audio_length_ms:.0f}ms)")
+                return True
+        
+        # Extended pattern-based detection for short audio (double-click or sustained key)
+        if audio_length_ms < 600:
+            extended_patterns = [
+                # Double character (key press + release)
+                "あっ", "いっ", "うっ", "えっ", "おっ",
+                "ああ", "いい", "うう", "ええ", "おお",
+                # With punctuation
+                "あっ。", "いっ。", "うっ。", "えっ。", "おっ。",
+                "あっ？", "いっ？", "うっ？", "えっ？", "おっ？",
+                "あっ！", "いっ！", "うっ！", "えっ！", "おっ！",
+                "あっ、", "いっ、", "うっ、", "えっ、", "おっ、",
+                # Common interjections from mechanical noise
+                "うん", "うん。", "うん？", "うん！", "うん、",
+                "んぅ", "んぅ。",
+            ]
+            
+            if text in extended_patterns:
+                if self.debug_logging:
+                    print(f"[ASR:DEBUG] Keyboard noise (double key): '{text}' (duration: {audio_length_ms:.0f}ms)")
                 return True
         
         return False
