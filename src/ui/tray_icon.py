@@ -92,10 +92,9 @@ class SystemTrayIcon(QObject):
             self.overlay_window.config_changed.emit(self.config)
 
     def _on_reset_position(self):
+        """Reset window position only (keep current width and height)."""
         self.overlay_window.move(100, 100)
-        self.overlay_window.resize(800, 160)
         self.config.ui.window_x = 100
         self.config.ui.window_y = 100
-        self.config.ui.window_width = 800
-        self.config.ui.window_height = 160
+        # Note: window_width and window_height are NOT reset - only position is reset
         self.config.save()

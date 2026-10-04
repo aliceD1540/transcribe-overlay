@@ -96,6 +96,8 @@ class OverlayWindow(QWidget):
         # Re-apply geometry after setWindowFlags() which may reset the window size
         self._restore_geometry()
         self.apply_styles()
+        # Show window after all geometry and styling is applied
+        self.show()
 
     def _init_window_flags(self):
         # Apply window flags based on display mode
@@ -105,17 +107,9 @@ class OverlayWindow(QWidget):
 
     def _restore_geometry(self):
         """Restore window geometry after setWindowFlags() which may have reset it."""
-        window_height = self.ui_config.window_height
-        if self.ui_config.display_mode == "window":
-            # Window mode needs more space for titlebar and content
-            window_height = max(400, window_height)
-
-        self.setGeometry(
-            self.ui_config.window_x,
-            self.ui_config.window_y,
-            self.ui_config.window_width,
-            window_height,
-        )
+        # Use move() and resize() separately instead of setGeometry() for more reliable application
+        self.move(self.ui_config.window_x, self.ui_config.window_y)
+        self.resize(self.ui_config.window_width, self.ui_config.window_height)
 
     def _apply_display_mode_flags(self):
         """Apply window flags based on current display mode."""
@@ -145,7 +139,7 @@ class OverlayWindow(QWidget):
         self.setWindowFlag(
             Qt.WindowType.WindowStaysOnTopHint, self.ui_config.always_on_top
         )
-        self.show()
+        # Don't call show() here - let the caller control visibility
         if hasattr(self, "asr_label"):
             self.apply_styles()
 
@@ -204,17 +198,13 @@ class OverlayWindow(QWidget):
         self.display_mode_changed.emit(mode)
 
     def _init_ui(self):
-        # Adjust window size based on display mode
-        window_height = self.ui_config.window_height
-        if self.ui_config.display_mode == "window":
-            # Window mode needs more space for titlebar and content
-            window_height = max(400, window_height)
-
+        # Use the configured window dimensions as-is
+        # (minimum height constraints are only applied when switching to window mode)
         self.setGeometry(
             self.ui_config.window_x,
             self.ui_config.window_y,
             self.ui_config.window_width,
-            window_height,
+            self.ui_config.window_height,
         )
 
         main_layout = QVBoxLayout()

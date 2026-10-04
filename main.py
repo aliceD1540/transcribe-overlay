@@ -23,7 +23,7 @@ def main():
 
     # Create Overlay Window
     overlay_window = OverlayWindow(config)
-    overlay_window.show()
+    # Note: overlay_window.show() is called in OverlayWindow.__init__()
 
     # Create Pipeline Thread
     pipeline = TranscriptionPipeline(config)

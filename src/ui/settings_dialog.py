@@ -220,6 +220,11 @@ class SettingsDialog(QDialog):
         self.window_width_spin.setSingleStep(10)
         self.window_width_spin.setToolTip("アプリケーションウインドウの横幅を設定します（透過/ウインドウモード共通）")
 
+        self.window_height_spin = QSpinBox()
+        self.window_height_spin.setRange(100, 1200)
+        self.window_height_spin.setSingleStep(10)
+        self.window_height_spin.setToolTip("アプリケーションウインドウの縦幅を設定します（透過/ウインドウモード共通）")
+
         self.max_display_chars_spin = QSpinBox()
         self.max_display_chars_spin.setRange(10, 1000)
         self.max_display_chars_spin.setSingleStep(10)
@@ -230,6 +235,7 @@ class SettingsDialog(QDialog):
         ui_layout.addRow("表示モード:", self.display_mode_combo)
         ui_layout.addRow(self.show_status_cb)
         ui_layout.addRow("ウインドウの横幅 (px):", self.window_width_spin)
+        ui_layout.addRow("ウインドウの縦幅 (px):", self.window_height_spin)
         ui_layout.addRow("最大表示文字数:", self.max_display_chars_spin)
         ui_layout.addRow("ステータスフォントサイズ (px):", self.status_font_size_spin)
         ui_layout.addRow("文字起こしフォントサイズ (px):", self.asr_font_size_spin)
@@ -446,6 +452,7 @@ class SettingsDialog(QDialog):
         self.bg_color_edit.setText(self.config.ui.bg_color)
         self.click_through_cb.setChecked(self.config.ui.click_through)
         self.window_width_spin.setValue(getattr(self.config.ui, "window_width", 800))
+        self.window_height_spin.setValue(getattr(self.config.ui, "window_height", 160))
         self.max_display_chars_spin.setValue(
             getattr(self.config.ui, "max_display_chars", 200)
         )
@@ -533,6 +540,7 @@ class SettingsDialog(QDialog):
         self.config.ui.bg_color = self.bg_color_edit.text().strip()
         self.config.ui.click_through = self.click_through_cb.isChecked()
         self.config.ui.window_width = self.window_width_spin.value()
+        self.config.ui.window_height = self.window_height_spin.value()
         self.config.ui.max_display_chars = self.max_display_chars_spin.value()
 
         # Debug
