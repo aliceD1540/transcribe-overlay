@@ -291,6 +291,59 @@ class MoonshineASREngine:
             # Calculate audio duration in milliseconds
             audio_length_ms = (len(audio) / 16000.0) * 1000
             
+            # Moonshine has limits on audio length processing
+            # Split long audio into chunks to avoid ONNX runtime errors
+            # Maximum chunk: ~10 seconds to be safe (Moonshine may have decoder limits)
+            max_chunk_samples = int(16000 * 10)  # 10 seconds
+            
+            if len(audio) > max_chunk_samples:
+                if self.debug_logging:
+                    print(f"[ASR:DEBUG] Audio too long ({audio_length_ms:.0f}ms), processing in chunks")
+                
+                # Process in overlapping chunks with generous overlap
+                results = []
+                chunk_size = max_chunk_samples
+                overlap = int(16000 * 1.0)  # 1.0s overlap for better continuity
+                
+                start = 0
+                chunk_num = 0
+                while start < len(audio):
+                    end = min(start + chunk_size, len(audio))
+                    chunk = audio[start:end]
+                    chunk_duration_ms = ((end - start) / 16000.0) * 1000
+                    
+                    if len(chunk) >= 4000:
+                        try:
+                            chunk_num += 1
+                            if self.debug_logging:
+                                print(f"[ASR:DEBUG] Processing chunk {chunk_num}: {start}-{end} ({chunk_duration_ms:.0f}ms)")
+                            
+                            result_text = self._process_audio_chunk(chunk, chunk_duration_ms)
+                            if result_text:
+                                results.append(result_text)
+                        except Exception as e:
+                            if self.debug_logging:
+                                print(f"[ASR:DEBUG] Error processing chunk {chunk_num} at sample {start}: {e}")
+                    
+                    start += chunk_size - overlap
+                
+                final_result = " ".join(results) if results else ""
+                if self.debug_logging and len(results) > 0:
+                    print(f"[ASR:DEBUG] Concatenated {len(results)} chunks: '{final_result}'")
+                return final_result
+            else:
+                # Process single chunk
+                return self._process_audio_chunk(audio, audio_length_ms)
+
+        except Exception as e:
+            print(f"[ASR] Error during Moonshine transcription: {e}")
+            import traceback
+            traceback.print_exc()
+            return ""
+
+    def _process_audio_chunk(self, audio: np.ndarray, audio_length_ms: float) -> str:
+        """Process a single audio chunk."""
+        try:
             # Create stream for offline recognition
             stream = self.recognizer.create_stream()
             
@@ -304,6 +357,9 @@ class MoonshineASREngine:
             result = stream.result
             if result.text:
                 text = result.text.strip()
+                
+                if self.debug_logging:
+                    print(f"[ASR:DEBUG] Raw recognition result: '{text}'")
                 
                 # Apply confidence checks
                 if not self._is_confidence_high_enough(result):
@@ -321,11 +377,28 @@ class MoonshineASREngine:
                 if not self._filter_extreme_noise_patterns(text):
                     return ""
                 
+                if self.debug_logging:
+                    print(f"[ASR:DEBUG] Final result after filtering: '{text}'")
+                
                 return text
-            return ""
+            else:
+                if self.debug_logging:
+                    print(f"[ASR:DEBUG] No recognition result (empty text). Samples: {len(audio)}, Duration: {audio_length_ms:.0f}ms")
+                return ""
 
+        except RuntimeError as e:
+            # ONNX Runtime errors - log but don't crash
+            error_str = str(e)
+            if "Attempting to broadcast" in error_str or "Non-zero status" in error_str:
+                if self.debug_logging:
+                    print(f"[ASR:DEBUG] ONNX Runtime shape error (recoverable): {e}")
+                # Return empty result instead of propagating error
+                return ""
+            else:
+                # Other runtime errors - log and propagate
+                raise
         except Exception as e:
-            print(f"[ASR] Error during Moonshine transcription: {e}")
-            import traceback
-            traceback.print_exc()
+            if self.debug_logging:
+                print(f"[ASR:DEBUG] Error in chunk processing: {type(e).__name__}: {e}")
+            # Return empty on error instead of crashing
             return ""
